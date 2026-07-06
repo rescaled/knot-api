@@ -1,0 +1,39 @@
+# systemd unit for knot-api. Install the project (e.g. /opt/knot-api with a
+# venv) and place the environment file at /etc/knot-api.env (mode 0600 —
+# it contains the API token).
+#
+# The API must run as a user that can (a) connect to the knotd control
+# socket and (b) write the zones directory — running as the knot user
+# satisfies both.
+#
+# --workers 1 is required: zone and transaction locks are in-process.
+
+[Unit]
+Description=knot-api — REST API for Knot DNS zone management
+Documentation=https://github.com/servinga/knot-api
+After=network.target knot.service
+Wants=knot.service
+
+[Service]
+Type=exec
+User=knot
+Group=knot
+EnvironmentFile=/etc/knot-api.env
+ExecStart=/opt/knot-api/.venv/bin/uvicorn --factory knot_api.app:create_app \
+    --host 127.0.0.1 --port 8080 --workers 1
+Restart=on-failure
+RestartSec=2
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+ReadWritePaths=/var/lib/knot/zones /run/knot
+
+[Install]
+WantedBy=multi-user.target

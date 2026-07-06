@@ -1,0 +1,45 @@
+# e2e harness: knotd 3.5 (LMDB confdb + generated catalog zone) + the API,
+# sharing the control socket and zones directory through volumes.
+#
+#   docker compose -f deploy/docker-compose.yml up --build -d
+#   curl -s -H 'Authorization: Bearer e2e-secret' http://127.0.0.1:8080/v1/zones
+#   KNOT_API_E2E=1 .venv/bin/pytest -m integration
+#   docker compose -f deploy/docker-compose.yml down -v
+
+services:
+  knot:
+    image: cznic/knot:v3.5.5
+    entrypoint: ["/bin/sh", "/knot-entrypoint.sh"]
+    volumes:
+      - ./knot.conf:/etc/knot/knot.conf:ro
+      - ./knot-entrypoint.sh:/knot-entrypoint.sh:ro
+      - rundir:/rundir
+      - zones:/zones
+      - storage:/storage
+    healthcheck:
+      test: ["CMD", "knotc", "-s", "/rundir/knot.sock", "status"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  api:
+    build:
+      context: ..
+    environment:
+      KNOT_API_TOKEN: e2e-secret
+      KNOT_API_KNOT_SOCKET: /rundir/knot.sock
+      KNOT_API_ZONES_DIR: /zones
+      KNOT_API_CATALOG_ZONE: catalog
+    volumes:
+      - rundir:/rundir
+      - zones:/zones
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      knot:
+        condition: service_healthy
+
+volumes:
+  rundir:
+  zones:
+  storage:
